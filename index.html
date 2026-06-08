@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>FIVE NIGHTS AT SABO'S</title>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Creepster&family=Special+Elite&display=swap');
+
+  :root {
+    --red: #c0392b;
+    --dark-red: #7b0000;
+    --yellow: #f39c12;
+    --bg: #0a0a0a;
+    --panel: #111111;
+    --green: #27ae60;
+    --gray: #2c2c2c;
+    --text: #e0d5c1;
+    --battery-green: #2ecc71;
+    --battery-yellow: #f1c40f;
+    --battery-red: #e74c3c;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    font-family: 'Special Elite', monospace;
+    color: var(--text);
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ─── SCANLINES OVERLAY ─── */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.15) 2px,
+      rgba(0,0,0,0.15) 4px
+    );
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  /* ─── TITLE / START SCREEN ─── */
+  #startScreen {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 900;
+    gap: 30px;
+  }
+  #startScreen h1 {
+    font-family: 'Creepster', cursive;
+    font-size: clamp(40px, 6vw, 80px);
+    color: var(--red);
+    text-shadow: 0 0 30px #ff000088, 0 0 60px #ff000033;
+    text-align: center;
+    letter-spacing: 4px;
+    animation: titleFlicker 3s infinite;
+  }
+  #startScreen .subtitle {
+    font-size: 18px;
+    color: #888;
+    letter-spacing: 6px;
+    text-transform: uppercase;
+  }
+  #startScreen .warning {
+    font-size: 13px;
+    color: #555;
+    text-align: center;
+    max-width: 400px;
+    line-height: 1.8;
+  }
+  @keyframes titleFlicker {
+    0%,95%,100% { opacity: 1; }
+    96% { opacity: 0.4; }
+    97% { opacity: 1; }
+    98% { opacity: 0.2; }
+  }
+
+  /* ─── BUTTONS ─── */
+  .btn {
+    background: transparent;
+    border: 2px solid var(--red);
+    color: var(--red);
+    font-family: 'Creepster', cursive;
+    font-size: 22px;
+    letter-spacing: 3px;
+    padding: 12px 40px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--red);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.2s;
+    z-index: -1;
+  }
+  .btn:hover { color: #fff; }
+  .btn:hover::before { transform: scaleX(1); }
+  .btn.secondary { border-color: #444; color: #444; font-size: 16px; padding: 8px 24px; }
+  .btn.secondary:hover { color: #fff; }
+  .btn.secondary::before { background: #444; }
+  .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* ─── GAME CONTAINER ─── */
+  #game {
+    display: none;
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+  }
+
+  /* ─── MAIN VIEW (CENTER CAMERA) ─── */
+  #mainView {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #050505;
+  }
+
+  #officeWrapper {
+    position: relative;
+    width: min(900px, 90vw);
+    aspect-ratio: 16/9;
+  }
+
+  /* Office background */
+  #office {
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(ellipse at 50% 60%, #1a1208 0%, #0d0d0d 70%, #000 100%);
+    position: relative;
+    overflow: hidden;
+    border: 1px solid #1a1a1a;
+  }
+
+  /* Desk elements */
+  .desk {
+    position: absolute;
+    bottom: 0;
+    left: 0; right: 0;
+    height: 28%;
+    background: linear-gradient(180deg, #1a1208 0%, #0f0b05 100%);
+    border-top: 2px solid #2a1f0a;
+  }
+
+  /* Monitor on desk */
+  .monitor {
+    position: absolute;
+    bottom: 26%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 22%;
+    height: 16%;
+    background: #111;
+    border: 3px solid #222;
+    border-radius: 2px;
+    box-shadow: 0 0 15px #00ff0022;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(6px, 1.2vw, 12px);
+    color: #0f0;
+    text-align: center;
+    font-family: monospace;
+  }
+
+  /* Left and right hallways */
+  .hallway {
+    position: absolute;
+    top: 5%;
+    width: 22%;
+    height: 75%;
+    background: #000;
+    border: 1px solid #111;
+  }
+  .hallway.left { left: 0; border-right: 2px solid #1a1a1a; }
+  .hallway.right { right: 0; border-left: 2px solid #1a1a1a; }
+
+  .hallway-inner {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* The animatronic image */
+  .animatronic {
+    position: absolute;
+    width: 90%;
+    max-height: 90%;
+    object-fit: contain;
+    display: none;
+    filter: brightness(0.6) contrast(1.5) sepia(0.4) saturate(0.5);
+    animation: creepIn 0.3s ease-out;
+  }
+  .animatronic.visible { display: block; }
+  @keyframes creepIn {
+    from { transform: scale(1.3) translateY(10px); opacity: 0; filter: brightness(2); }
+    to { transform: scale(1); opacity: 1; }
+  }
+
+  /* Door mechanisms */
+  .door-panel {
+    position: absolute;
+    top: 5%;
+    height: 75%;
+    width: 6%;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    z-index: 10;
+    transition: filter 0.3s;
+  }
+  .door-panel.left { left: 21%; }
+  .door-panel.right { right: 21%; }
+  .door-panel:hover { filter: brightness(1.3); }
+
+  .door-visual {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 100%;
+    transition: background 0.3s;
+  }
+  .door-visual.open {
+    background: linear-gradient(90deg, #1a1a1a, #0d0d0d);
+    border: 1px solid #222;
+  }
+  .door-visual.closed {
+    background: linear-gradient(90deg, #3a3020, #2a2015);
+    border: 1px solid #5a4a30;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+  }
+
+  .door-label {
+    position: absolute;
+    bottom: -22px;
+    font-family: 'Creepster', cursive;
+    font-size: clamp(8px, 1.2vw, 13px);
+    color: #666;
+    text-align: center;
+    width: 200%;
+    pointer-events: none;
+  }
+
+  .bolt {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #333;
+    border: 1px solid #444;
+    position: relative;
+    z-index: 1;
+  }
+  .door-visual.closed ~ .bolt { background: #5a4030; border-color: #7a6040; }
+
+  /* ─── HUD ─── */
+  #hud {
+    position: absolute;
+    bottom: 0;
+    left: 0; right: 0;
+    height: 8%;
+    background: rgba(0,0,0,0.9);
+    border-top: 1px solid #1a1a1a;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    z-index: 20;
+  }
+
+  .hud-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: clamp(11px, 1.5vw, 16px);
+  }
+  .hud-label {
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-size: 0.75em;
+  }
+
+  #batteryBar {
+    width: clamp(80px, 12vw, 160px);
+    height: 14px;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  #batteryFill {
+    height: 100%;
+    width: 100%;
+    background: var(--battery-green);
+    transition: width 0.2s, background 0.5s;
+    border-radius: 2px;
+  }
+  #batteryPct {
+    font-size: 0.9em;
+    min-width: 40px;
+    text-align: right;
+  }
+
+  #clock {
+    font-family: 'Creepster', cursive;
+    font-size: clamp(16px, 2.5vw, 28px);
+    color: var(--yellow);
+    letter-spacing: 2px;
+    text-shadow: 0 0 10px #f39c1255;
+  }
+
+  #nightLabel {
+    font-family: 'Creepster', cursive;
+    font-size: clamp(12px, 2vw, 20px);
+    color: var(--dark-red);
+    text-shadow: 0 0 8px #7b000088;
+  }
+
+  .door-status-hud {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .ds-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    font-size: clamp(9px, 1vw, 11px);
+    color: #444;
+  }
+  .ds-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    transition: all 0.3s;
+  }
+  .ds-dot.open { background: #27ae60; box-shadow: 0 0 6px #27ae6088; }
+  .ds-dot.closed { background: #c0392b; box-shadow: 0 0 6px #c0392b88; }
+
+  /* ─── ATTACK OVERLAY / JUMPSCARE ─── */
+  #attackOverlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 800;
+    background: #000;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    overflow: hidden;
+  }
+  #attackOverlay.show { display: flex; }
+
+  /* Imagem tremendo na tela toda */
+  #jumpscareImg {
+    position: absolute;
+    width: 100vw;
+    height: 100vh;
+    object-fit: cover; /* Para preencher a tela inteira */
+    z-index: 801;
+    filter: brightness(1.5) contrast(2) saturate(2);
+    animation: violentShake 0.08s infinite;
+  }
+
+  @keyframes violentShake {
+    0% { transform: translate(0, 0) scale(1); }
+    25% { transform: translate(-20px, 15px) scale(1.05); }
+    50% { transform: translate(20px, -15px) scale(1.1); }
+    75% { transform: translate(-15px, 20px) scale(1.05); }
+    100% { transform: translate(15px, -20px) scale(1); }
+  }
+
+  #attackText {
+    position: relative;
+    z-index: 802; /* Fica por cima da imagem */
+    font-family: 'Creepster', cursive;
+    font-size: clamp(30px, 7vw, 80px);
+    color: #fff;
+    text-shadow: 0 0 20px #000, 0 0 40px #ff0000;
+    animation: textFlash 0.2s infinite;
+    background: rgba(0,0,0,0.5); /* Leve fundo para leitura */
+    padding: 10px 30px;
+    border-radius: 10px;
+  }
+  @keyframes textFlash {
+    0%,100% { opacity: 1; color: #fff; }
+    50% { opacity: 0.5; color: #ff0000; }
+  }
+
+  /* Botão do game over ajustado para ficar por cima */
+  #attackOverlay .btn {
+    position: relative;
+    z-index: 802;
+    background: rgba(0,0,0,0.8);
+  }
+
+  /* ─── WIN SCREEN ─── */
+  #winScreen {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #000;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 850;
+    gap: 20px;
+  }
+  #winScreen.show { display: flex; }
+  #winScreen h2 {
+    font-family: 'Creepster', cursive;
+    font-size: clamp(40px, 8vw, 80px);
+    color: var(--yellow);
+    text-shadow: 0 0 30px #f39c1288;
+    animation: titleFlicker 4s infinite;
+  }
+
+  /* ─── SERIAL CONNECTION UI ─── */
+  #serialBar {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(0,0,0,0.7);
+    border: 1px solid #222;
+    padding: 6px 12px;
+    border-radius: 2px;
+    font-size: 11px;
+  }
+  .serial-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #333;
+    transition: all 0.3s;
+  }
+  .serial-dot.connected { background: #27ae60; box-shadow: 0 0 6px #27ae60; }
+  .serial-dot.disconnected { background: #e74c3c; }
+  #serialStatus { color: #555; }
+
+  /* ─── AMBIENT FLICKER ─── */
+  #ambientFlicker {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 5;
+    opacity: 0;
+    background: rgba(255,200,100,0.03);
+    animation: flicker 0.15s infinite;
+  }
+  @keyframes flicker {
+    0%,90%,100% { opacity: 0; }
+    91% { opacity: 1; }
+    92% { opacity: 0; }
+    95% { opacity: 0.5; }
+    96% { opacity: 0; }
+  }
+
+  /* ─── VIGNETTE ─── */
+  #office::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.85) 100%);
+    pointer-events: none;
+    z-index: 3;
+  }
+
+  #office.alert {
+    animation: alertPulse 0.8s infinite;
+  }
+  @keyframes alertPulse {
+    0%,100% { box-shadow: inset 0 0 0px transparent; }
+    50% { box-shadow: inset 0 0 40px rgba(192,57,43,0.4); }
+  }
+
+  #serialLog {
+    display: none;
+    position: absolute;
+    bottom: 9%;
+    left: 10px;
+    font-size: 10px;
+    color: #0f0;
+    font-family: monospace;
+    background: rgba(0,0,0,0.7);
+    padding: 4px 8px;
+    border: 1px solid #1a1a1a;
+    max-width: 250px;
+    z-index: 20;
+  }
+
+  #nightProgress {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 3px;
+    background: var(--dark-red);
+    transition: width 1s linear;
+    z-index: 25;
+    box-shadow: 0 0 8px var(--red);
+  }
+</style>
+</head>
+<body>
+
+<div id="startScreen">
+  <h1>FIVE NIGHTS<br>AT SABO'S</h1>
+  <div class="subtitle">Uma noite de terror</div>
+  <div class="warning">
+    ⚠ Survive until 6 AM<br>
+    As portas agora gastam <b>MUITA</b> bateria.<br>
+    A noite passará mais rápido.<br><br>
+    <span style="color:#333">Controle: Arduino via Serial USB ou teclado (Q / E)</span>
+  </div>
+  <div style="display:flex; gap:16px; flex-wrap:wrap; justify-content:center;">
+    <button class="btn" onclick="startGame()">COMEÇAR</button>
+  </div>
+  <div style="font-size:11px; color:#333; margin-top:10px;">
+    Teclas: [Q] = Porta Esquerda &nbsp;|&nbsp; [E] = Porta Direita
+  </div>
+</div>
+
+<div id="game">
+  <div id="mainView">
+    <div id="officeWrapper">
+      <div id="office">
+        <div id="nightProgress"></div>
+        <div id="ambientFlicker"></div>
+
+        <div class="hallway left">
+          <div class="hallway-inner">
+            <img id="animLeft" class="animatronic" src="sabo.png" alt="Sabo Esquerda">
+          </div>
+        </div>
+        <div class="hallway right">
+          <div class="hallway-inner">
+            <img id="animRight" class="animatronic" src="sabo.png" alt="Sabo Direita">
+          </div>
+        </div>
+
+        <div class="desk"></div>
+        <div class="monitor">
+          <div id="monitorText" style="padding:4px; line-height:1.4">CAM 01<br>OFFLINE<br><span style="color:#333">--:--</span></div>
+        </div>
+
+        <div class="door-panel left" id="doorPanelLeft" onclick="toggleDoor('left')">
+          <div class="door-visual open" id="doorVisualLeft"></div>
+          <div class="bolt" style="z-index:2"></div>
+          <div class="bolt" style="z-index:2"></div>
+          <div class="bolt" style="z-index:2"></div>
+          <div class="door-label">PORTA ESQ<br>[Q]</div>
+        </div>
+
+        <div class="door-panel right" id="doorPanelRight" onclick="toggleDoor('right')">
+          <div class="door-visual open" id="doorVisualRight"></div>
+          <div class="bolt" style="z-index:2"></div>
+          <div class="bolt" style="z-index:2"></div>
+          <div class="bolt" style="z-index:2"></div>
+          <div class="door-label">PORTA DIR<br>[E]</div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div id="hud">
+    <div class="hud-item">
+      <span class="hud-label">Bateria</span>
+      <div id="batteryBar"><div id="batteryFill"></div></div>
+      <span id="batteryPct">100%</span>
+    </div>
+    <div id="nightLabel">NOITE 1</div>
+    <div id="clock">12:00 AM</div>
+    <div class="door-status-hud">
+      <div class="ds-item"><div class="ds-dot open" id="dsLeft"></div><span>ESQ</span></div>
+      <div class="ds-item"><div class="ds-dot open" id="dsRight"></div><span>DIR</span></div>
+    </div>
+  </div>
+
+  <div id="serialBar">
+    <div class="serial-dot disconnected" id="serialDot"></div>
+    <span id="serialStatus">Servidor: desconectado</span>
+    <button class="btn secondary" style="padding:3px 10px;font-size:10px;" onclick="connectSerial()">Conectar</button>
+  </div>
+
+  <div id="serialLog"></div>
+</div>
+
+<div id="attackOverlay">
+  <img id="jumpscareImg" src="sabo_jumpscare.png" alt="Susto">
+  <div id="attackText">GAME OVER</div>
+  <button class="btn" onclick="resetGame()">TENTAR DE NOVO</button>
+</div>
+
+<div id="winScreen">
+  <h2>🌅 VOCÊ SOBREVIVEU!</h2>
+  <div style="color:#555; font-size:16px; letter-spacing:4px;">6:00 AM — FIM DA NOITE</div>
+  <div id="winStats" style="color:#888; font-size:14px; text-align:center; line-height:2;"></div>
+  <button class="btn" onclick="resetGame()">JOGAR NOVAMENTE</button>
+</div>
+
+<script>
+// ════════════════════════════════════════════
+//  GAME STATE & TWEAKS
+// ════════════════════════════════════════════
+const NIGHT_DURATION_MS = 3 * 60 * 1000; // 3 minutos = noite inteira
+const HOUR_MS = NIGHT_DURATION_MS / 6;   // 6 horas no jogo (12 às 6)
+
+// Aumento brutal do consumo de bateria
+const BATTERY_DRAIN_PER_DOOR_PER_SECOND = 0.8; // 0.8% por segundo por porta
+const BATTERY_PASSIVE_DRAIN = 0.2;             // 0.2% passivamente
+
+const state = {
+  running: false,
+  battery: 100,
+  leftClosed: false,
+  rightClosed: false,
+  animLeft: false,
+  animRight: false,
+  startTime: 0,
+  attacked: false,
+  attackTimeout: null,
+  doorTimeout: null,
+  animTimeout: null,
+  attackCount: 0,
+  survivedAttacks: 0,
+};
+
+// ════════════════════════════════════════════
+//  SOCKET.IO / BACKEND NETWORK CONNECTION
+// ════════════════════════════════════════════
+const socket = io('http://localhost:3000'); 
+
+function connectSerial() {
+  if (!socket.connected) {
+    socket.connect();
+  }
+}
+
+socket.on('connect', () => {
+  updateSerialUI(true);
+  logSerial("Conectado ao servidor Node.js!");
+});
+
+socket.on('disconnect', () => {
+  updateSerialUI(false);
+  logSerial("Desconectado do servidor.");
+});
+
+socket.on('dados_arduino', (line) => {
+  const data = line.trim();
+  logSerial(data);
+  
+  if (data === 'PORTA_ESQUERDA:FECHADA') setDoor('left', true);
+  else if (data === 'PORTA_ESQUERDA:ABERTA') setDoor('left', false);
+  else if (data === 'PORTA_DIREITA:FECHADA') setDoor('right', true);
+  else if (data === 'PORTA_DIREITA:ABERTA') setDoor('right', false);
+});
+
+function updateSerialUI(connected) {
+  document.getElementById('serialDot').className = 'serial-dot ' + (connected ? 'connected' : 'disconnected');
+  document.getElementById('serialStatus').textContent = 'Servidor: ' + (connected ? 'conectado ✓' : 'desconectado');
+}
+
+function logSerial(msg) {
+  const el = document.getElementById('serialLog');
+  el.style.display = 'block';
+  el.textContent = '> ' + msg;
+  setTimeout(() => { el.style.display = 'none'; }, 2000);
+}
+
+// ════════════════════════════════════════════
+//  KEYBOARD FALLBACK
+// ════════════════════════════════════════════
+document.addEventListener('keydown', e => {
+  if (!state.running) return;
+  if (e.key === 'q' || e.key === 'Q') toggleDoor('left');
+  if (e.key === 'e' || e.key === 'E') toggleDoor('right');
+});
+
+// ════════════════════════════════════════════
+//  DOOR CONTROL
+// ════════════════════════════════════════════
+function toggleDoor(side) {
+  if (!state.running) return;
+  if (side === 'left') setDoor('left', !state.leftClosed);
+  else setDoor('right', !state.rightClosed);
+}
+
+function setDoor(side, closed) {
+  if (!state.running) return;
+  if (side === 'left') {
+    state.leftClosed = closed;
+    const vis = document.getElementById('doorVisualLeft');
+    vis.className = 'door-visual ' + (closed ? 'closed' : 'open');
+    document.getElementById('dsLeft').className = 'ds-dot ' + (closed ? 'closed' : 'open');
+  } else {
+    state.rightClosed = closed;
+    const vis = document.getElementById('doorVisualRight');
+    vis.className = 'door-visual ' + (closed ? 'closed' : 'open');
+    document.getElementById('dsRight').className = 'ds-dot ' + (closed ? 'closed' : 'open');
+  }
+}
+
+// ════════════════════════════════════════════
+//  ANIMATRONIC LOGIC
+// ════════════════════════════════════════════
+function scheduleNextAnim() {
+  if (!state.running) return;
+  const elapsed = Date.now() - state.startTime;
+  const progress = Math.min(elapsed / NIGHT_DURATION_MS, 1);
+  
+  // Como o jogo está mais rápido, as aparições precisam ser mais frequentes
+  const minDelay = 2000 - progress * 1000;   // Começa em 2s, cai pra 1s
+  const maxDelay = 8000 - progress * 4000;   // Começa em 8s, cai pra 4s
+  const delay = minDelay + Math.random() * (maxDelay - minDelay);
+  
+  state.animTimeout = setTimeout(triggerAnim, delay);
+}
+
+function triggerAnim() {
+  if (!state.running) return;
+  const side = Math.random() < 0.5 ? 'left' : 'right';
+  showAnim(side);
+}
+
+function showAnim(side) {
+  if (!state.running) return;
+  state.animLeft = side === 'left';
+  state.animRight = side === 'right';
+
+  document.getElementById('animLeft').classList.toggle('visible', state.animLeft);
+  document.getElementById('animRight').classList.toggle('visible', state.animRight);
+  document.getElementById('office').classList.add('alert');
+
+  const elapsed = Date.now() - state.startTime;
+  const progress = Math.min(elapsed / NIGHT_DURATION_MS, 1);
+  const reactTime = 2500 - progress * 1000; // Tempo de reação de 2.5s -> 1.5s
+
+  state.doorTimeout = setTimeout(() => {
+    if (!state.running) return;
+    const blocked = (side === 'left' && state.leftClosed) ||
+                    (side === 'right' && state.rightClosed);
+    hideAnim();
+    if (!blocked && state.battery > 0) {
+      triggerAttack();
+    } else {
+      state.survivedAttacks++;
+      scheduleNextAnim();
+    }
+  }, reactTime);
+}
+
+function hideAnim() {
+  state.animLeft = false;
+  state.animRight = false;
+  document.getElementById('animLeft').classList.remove('visible');
+  document.getElementById('animRight').classList.remove('visible');
+  document.getElementById('office').classList.remove('alert');
+}
+
+function triggerAttack() {
+  state.running = false;
+  state.attackCount++;
+  clearAllTimers();
+  document.getElementById('attackOverlay').classList.add('show');
+}
+
+// ════════════════════════════════════════════
+//  CLOCK & TIME
+// ════════════════════════════════════════════
+const HOURS = ['12 AM','1 AM','2 AM','3 AM','4 AM','5 AM','6 AM'];
+
+function getGameHour() {
+  const elapsed = Date.now() - state.startTime;
+  return Math.min(Math.floor(elapsed / HOUR_MS), 6);
+}
+
+// ════════════════════════════════════════════
+//  BATTERY
+// ════════════════════════════════════════════
+function updateBattery(dt) {
+  let drain = BATTERY_PASSIVE_DRAIN;
+  if (state.leftClosed) drain += BATTERY_DRAIN_PER_DOOR_PER_SECOND;
+  if (state.rightClosed) drain += BATTERY_DRAIN_PER_DOOR_PER_SECOND;
+  state.battery = Math.max(0, state.battery - drain * dt);
+
+  const pct = Math.round(state.battery);
+  const fill = document.getElementById('batteryFill');
+  const pctEl = document.getElementById('batteryPct');
+  fill.style.width = pct + '%';
+  pctEl.textContent = pct + '%';
+
+  if (pct > 60) fill.style.background = 'var(--battery-green)';
+  else if (pct > 25) fill.style.background = 'var(--battery-yellow)';
+  else fill.style.background = 'var(--battery-red)';
+
+  if (state.battery <= 0) {
+    setDoor('left', false);
+    setDoor('right', false);
+  }
+}
+
+// ════════════════════════════════════════════
+//  MAIN GAME LOOP
+// ════════════════════════════════════════════
+let lastTick = 0;
+function gameLoop(ts) {
+  if (!state.running) return;
+  const dt = (ts - lastTick) / 1000;
+  lastTick = ts;
+
+  updateBattery(dt);
+
+  const hour = getGameHour();
+  if (hour >= 6) {
+    nightWin();
+    return;
+  }
+  document.getElementById('clock').textContent = HOURS[hour] || '6 AM';
+
+  const progress = (Date.now() - state.startTime) / NIGHT_DURATION_MS * 100;
+  document.getElementById('nightProgress').style.width = Math.min(progress, 100) + '%';
+
+  document.getElementById('monitorText').innerHTML =
+    `CAM 0${Math.ceil(Math.random()*4)||1}<br>${state.animLeft||state.animRight ? '<span style="color:#c0392b">!! INTRUSO !!</span>' : 'OFFLINE'}<br><span style="color:#444">${HOURS[hour]}</span>`;
+
+  requestAnimationFrame(gameLoop);
+}
+
+// ════════════════════════════════════════════
+//  WIN / LOSE / RESET
+// ════════════════════════════════════════════
+function nightWin() {
+  state.running = false;
+  clearAllTimers();
+  hideAnim();
+  document.getElementById('winStats').innerHTML =
+    `Bateria restante: <b style="color:var(--yellow)">${Math.round(state.battery)}%</b><br>
+     Ataques sobrevividos: <b style="color:var(--yellow)">${state.survivedAttacks}</b>`;
+  document.getElementById('winScreen').classList.add('show');
+}
+
+function clearAllTimers() {
+  clearTimeout(state.animTimeout);
+  clearTimeout(state.doorTimeout);
+  clearTimeout(state.attackTimeout);
+}
+
+function resetGame() {
+  clearAllTimers();
+  hideAnim();
+  state.running = false;
+  state.battery = 100;
+  state.leftClosed = false;
+  state.rightClosed = false;
+  state.animLeft = false;
+  state.animRight = false;
+  state.survivedAttacks = 0;
+  setDoor('left', false);
+  setDoor('right', false);
+  document.getElementById('attackOverlay').classList.remove('show');
+  document.getElementById('winScreen').classList.remove('show');
+  document.getElementById('nightProgress').style.width = '0';
+  document.getElementById('startScreen').style.display = 'flex';
+  document.getElementById('game').style.display = 'none';
+}
+
+function startGame() {
+  document.getElementById('startScreen').style.display = 'none';
+  document.getElementById('game').style.display = 'block';
+  state.running = true;
+  state.battery = 100;
+  state.startTime = Date.now();
+  state.survivedAttacks = 0;
+  lastTick = performance.now();
+  requestAnimationFrame(gameLoop);
+  scheduleNextAnim();
+}
+</script>
+</body>
+</html>
