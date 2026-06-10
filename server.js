@@ -12,7 +12,7 @@ const io = new Server(server, { cors: { origin: '*' } });
 
 // ATENÇÃO: Verifique se o seu Arduino está na COM3 mesmo. 
 // Se for outra porta (ex: COM4), mude aqui embaixo:
-const port = new SerialPort({ path: 'COM3', baudRate: 9600 });
+const port = new SerialPort({ path: '/dev/ttyUSB0', baudRate: 115200 });
 const parser = port.pipe(new ReadlineParser({ delimiter: '\r\n' }));
 
 // Lendo a porta serial e enviando para o Frontend
